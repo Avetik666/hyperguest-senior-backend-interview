@@ -13,14 +13,33 @@ export class Queue {
         this.messages.set(message.id, message)
     }
 
-    Dequeue = (workerId: number): Message | undefined => {
-        const [messageId] = this.messages.keys();
-        if (this.workerProcessing.has(messageId)) {
-            return;
+    private hasConflict(message: Message): boolean {
+        for (const lockedMessageId of this.workerProcessing.keys()) {
+            const lockedMessage = this.messages.get(lockedMessageId);
+            if (lockedMessage && lockedMessage.key === message.key) {
+                return true;
+            }
         }
-        const message  = this.messages.get(messageId);
-        this.workerProcessing.set(messageId, workerId);
-        return message;
+        return false;
+    }
+
+    private lockMessage(id: string, workerId: number): void {
+        this.workerProcessing.set(id, workerId);
+    }
+
+    Dequeue = (workerId: number): Message | undefined => {
+        for (const [id, message] of this.messages) {
+            if (this.workerProcessing.has(id)) {
+                continue;
+            }
+
+            if (!this.hasConflict(message)) {
+                this.lockMessage(id, workerId);
+                return message;
+            }
+        }
+
+        return;
     }
 
     Confirm = (workerId: number, messageId: string) => {
